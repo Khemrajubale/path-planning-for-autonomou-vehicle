@@ -1,0 +1,70 @@
+# copied the entire "bitAND" code to make further changes to add the concept of "Hough Transform":
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt #"pyplot" is a sub-package of the "matplotlib" library..
+
+
+image=cv2.imread('test_image.jpg')
+lane_image=np.copy(image)
+
+
+# Function definition (canny):
+def canny(img):
+    gray=cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
+    c=cv2.Canny(gray,50,150)
+    return c
+
+
+'''The function "HoughLinesP()", as is used in the later part of this code, does the job of JUST DETECTING THE LINES. We need
+   to yet define one more function which shall show those lines. The idea is to basically create another BLACK MASK of the same
+   size as that of the original image and then display the detected lines onto it.'''
+def display_lines(image,lines_detected):
+    line_image=np.zeros_like(image) # We shall display the detected lines onto this black mask
+    #We shall now check if the lines got detected:
+    if lines_detected is not None: # is the lines_detected 3D array is not empty then..
+        for line in lines_detected:
+            #printing each line which is iterated through:
+            #print(line)# Every line is a different 2D array, in the form of [[x1 y1 x2 y2]],refer notes for detailed analysis..
+            # We now reshape the above 2D line arrays into 1D ones of 4 elements EACH:
+            #line=line.reshape(4)
+            #We could instead write the above as (unpacking the elements of the above array "line"):
+            x1,y1,x2,y2=line.reshape(4)
+            #This openCV function "line()" draws a line joining two points. (Notes for what the arguments are..):
+            cv2.line(line_image,(x1,y1),(x2,y2),(255,0,0),10)
+        return line_image
+
+
+
+# Function definition (region_of_interest):
+def region_of_interest(img):
+    height=img.shape[0]
+    triangle=np.array([
+    [(200,height),(1100,height),(550,250)]
+    ])
+    mask=np.zeros_like(img)
+    cv2.fillPoly(mask,triangle,255) # the third parameter specifies the desired colour of the polygon (which is 255=white, in this case)
+    masked_image=cv2.bitwise_and(img,mask)
+    return masked_image # returning "masked_image" instead of "mask"(as done in the previous ROI code)
+
+
+
+canny=canny(lane_image)
+cropped_image=region_of_interest(canny)
+'''The "HoughLinesP()" function is used for finding the Hough Transform (considering polar coordinate system), which
+   basically detects the straight lines and thus is used for identifying the lane-lines. (Written in detail in my notes):'''
+lines_detected=cv2.HoughLinesP(cropped_image,2,np.pi/180,100,np.array([]),minLineLength=40,maxLineGap=5) #notes for detailed documentation of the arguments
+#The above "lines_detected" basically is a 3D array
+'''the above function "HoughLinesP" only detects such lines; we need to even define a different function (we named it "display_lines")
+   for displaying these..the same has been defined above'''
+# We shall now define a variable called "line_image" to which we shall assign the value returned by the defined "display_lines()" function:
+line_image=display_lines(lane_image,lines_detected)
+#We now blend the black image with blue lines with the original coloured image:
+#combined_image=cv2.bitwise_or(lane_image,line_image) OR:
+combined_image=cv2.addWeighted(lane_image,0.8,line_image,1,1)
+'''The weight assigned to "lane_image" is 0.8 and the one assigned to "line_image" is 1, meaning that the "lane_image" elements
+   are getting multiplied by 0.8, decreasing their intensities and thus making them darker; and the "line_image" elements
+   are getting multiplied by 1, thus not changing their intensities. The "line_image" elements hence have 20% more weight
+   than the corresponding "lane_image" ones, showing more pronounced lines. The third argument is the "gamma argument"
+   which is set to 1.'''
+cv2.imshow('result (line-image):',combined_image)
+cv2.waitKey(0)
